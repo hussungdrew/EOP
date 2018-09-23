@@ -7,6 +7,10 @@ SA_EOP <- function(data.path, file.name, since.date, fields, return.format){
   #' of 1000 individual time series, please allow lots of computing time. By lots of time, we're talking run and
   #' go grab some coffee and a snack and then come back and check and see that it still needs more time.
   #' 
+  #' Returns: a list object with two elements: data, containing the resulting seasonally
+  #' adjusted data frame, and fails, a list of those series that failed the seasonal adjustment process
+  #' which inevitably will occur.
+  #' 
   #' @param data.path Gives path to data, i.e. \code{'C:/Users/blahblah'} if on Windows. No default.
   #' @param file.name The name of the .dta file holding the CPS data - function works well on Ohio, US data, etc. No default.
   #' @param since.date This is a data passed as a character string i.e. \code{'1990-01-01'}, YEAR-MONTH-DAY that gives the first month of data you are interested in.
@@ -15,12 +19,13 @@ SA_EOP <- function(data.path, file.name, since.date, fields, return.format){
   #' @examples
   #' cps <- SA_EOP(data.path = 'C:/Users/599249/Desktop', file.name = 'cps_all.dta')
   #' cps <- SA_EOP(data.path = 'C:/Users/599249/Desktop', file.name = 'cps_all.dta', since.date = '2000-01-01', return.format = 'DTA')
+  #' @export
   
   
   ##This top portion simply checks whether the user's R session has all of
    # our required packages installed. If it doesn't, the user can elect to
    # have the program install the package or not.
-  dependencies <- c('data.table', 'lubridate', 'seasonal', 'readstata13', 'tidyr')
+  dependencies <- c('data.table', 'lubridate', 'seasonal', 'readstata13', 'tidyr', 'foreign')
   if (!all(dependencies %in% rownames(installed.packages()))){
     response <- readline(paste0(" Package(s) ", 
                 dependencies[which(!dependencies %in% rownames(installed.packages()))],
@@ -33,7 +38,7 @@ SA_EOP <- function(data.path, file.name, since.date, fields, return.format){
     }
   }
   else{
-    stop('This function relies upon data.table, lubridate, seasonal, and readstata13. 
+    stop('This function relies upon data.table, lubridate, seasonal, tidyr, foreign, and readstata13. 
          \n Please install before using. Goodbye.')
   }
     
@@ -44,6 +49,8 @@ SA_EOP <- function(data.path, file.name, since.date, fields, return.format){
   library(lubridate)
   library(data.table)
   library(seasonal)
+  library(tidyr)
+  library(foreign)
   ##Default parameters if user fails to supply them 
    # since.date allows user to subset cps to only capture data since a given date, for speed
    # fields is a vector of the names that the user wishes to have seasonally adjusted
@@ -51,6 +58,9 @@ SA_EOP <- function(data.path, file.name, since.date, fields, return.format){
   if(missing(fields)) fields <- c('empl', 'hourwage_ft_r', 'earnweek_ft_r', 'hourwage_ft_r_50',
                                   'earnweek_ft_r_50', 'hourwage_ft_r_10', 'earnweek_ft_r_10', 'hourwage_ft_r_90',
                                   'earnweek_ft_r_90')
+  if(missing(data.path)) stop('Please give a path to the data file as a string for the data.path param before using')
+  if(missing(file.name)) stop('Give the name of the dataset to be seasonally adjusted as a string for the file.name param before using')
+  if(missing(return.format)) return.format <- "DTA"
   ##If not missing since.date, convert it to a date
   since.date <- as.Date(since.date)
   ##Read in data from path given from user's data.path, file.name params
@@ -100,10 +110,13 @@ SA_EOP <- function(data.path, file.name, since.date, fields, return.format){
           if (length(cps[hs == educ & female == sex & maj_ind == industry][[field]]) > 0){
 
           big.ol.list[[ticker]] <- ts(cps[hs == educ & female == sex & maj_ind == industry, c('date', field), with = F] %>%
-                                        complete(., date = full) %>% as.data.table() %>%  .[ , paste(field), with = F], 
+                                        complete(., date = full) %>% as.data.table() %>% 
+                                        setnames(field, paste0(educ, '_', sex, '_', industry, '_', field)) %>% 
+                                        .[ , paste0(educ, '_', sex, '_', industry, '_', field), with = F], 
                                                   start = year(since.date), frequency = 12)
-          # names(big.ol.list)[[ticker]] <- paste0(educ, '_', sex, '_', industry, '_', field)
+          names(big.ol.list)[[ticker]] <- dimnames(big.ol.list[[ticker]])[[2]]
           ticker <- ticker + 1
+          
           }
           else{}
         }
@@ -113,10 +126,56 @@ SA_EOP <- function(data.path, file.name, since.date, fields, return.format){
   ## Grab only the non-null elements from the big.ol.list
   big.ol.list <- big.ol.list[!sapply(big.ol.list, is.null)]
   ## Seasonally adjust each element in the list
-  big.ol.list <- lapply(big.ol.list, 
-                        FUN = function(e) {tryCatch({seas(e, x11 = "", na.action = na.x13)},
-                        error = function(e){})})
+   #  We also keep track of the indexes for which seasonal adjustment failed (for various reasons)
+   #  and then replace these failed runs with the original time series
+  big.ol.list.SA <- lapply(big.ol.list, 
+                        FUN = function(e) {tryCatch({seas(e, x11 = "", na.action = na.x13)$data[ , 1]},
+                        error = function(e){cat(paste(e), conditionMessage(e), '\n')})})
+  ## Indexes that failed
+  fails <- sapply(big.ol.list.SA, is.null)
   
+  fail.list <- names(big.ol.list)[fails]
+  
+  ##Replace failures with the original time series
+  big.ol.list.SA[fails] <- big.ol.list[fails] 
+  ##Set names attribute of the adjusted time series
+  names(big.ol.list.SA) <- names(big.ol.list)
+  
+  ##Complicated: bind all of the series for a given combo of female, hs, and maj_ind
+   #  into an individual data table, then we will merge all of these together
+  size.frames <- length(fields)  
+  breaks <- seq(1, length(big.ol.list), size.frames)
+  
+  big.ol.list <- vector('list', length(breaks))
+  for (i in 1:length(breaks)){
+    big.ol.list[[i]] <- as.data.table(big.ol.list.SA[breaks[i]:(breaks[i] + size.frames - 1)]) 
+    big.ol.list[[i]] <- big.ol.list[[i]][ , `:=` (hs = strsplit(names(big.ol.list[[i]])[1], split = '_')[[1]][1],
+                 female = strsplit(names(big.ol.list[[i]])[1], split = '_')[[1]][2],
+                 maj_ind = strsplit(names(big.ol.list[[i]])[1], split = '_')[[1]][3])] %>%
+      setnames(., old = setdiff(names(big.ol.list[[i]]), c('hs', 'female', 'maj_ind')),
+               new = fields) %>%
+      lapply(., as.numeric, simplify = F)
+  }
+  ## Bind all of these individual data.tables together into a data.table and get result
+   #  into our familiar format
+  cps <- rbindlist(big.ol.list) %>%
+    .[ , c('female', 'hs', 'maj_ind', fields), with = F] %>%
+    .[ , date := full] %>%
+    .[order(date, female, hs, maj_ind)] 
+  for (fact in c('female', 'hs', 'maj_ind')){
+    set(cps, i = NULL, j = fact, value = factor(cps[[fact]]))
+  }
+  ## Spit out resulting data.table in user's chosen file format into whatever file path passed
+   #  as data.path
+  if (return.format %in% c('CSV', 'csv')){
+    write.csv(cps, file = paste0(data.path, '/', file.name, '_', 'SA.csv'), row.names = F)
+  }
+  else if (return.format %in% c('dta', 'DTA')){
+    write.dta(cps, file = paste0(data.path, '/', file.name, '_', 'SA.dta'), version = 11)
+  }
+
+  cps <- list(data = cps, fails = fail.list)
+    
   return(cps)
 }
 
