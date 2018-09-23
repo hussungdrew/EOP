@@ -1,4 +1,4 @@
-0# EOP
+# EOP
 Source code for building the EOP's libraries for data viz and web maintenance
 ## About
 This repository hosts code for the EOP.Maintenance R package used by Miami University's Economic Opportunity Project. This github was started to enable easy code sharing, process improvement suggestions, and collaborative web development for the EOP's website (fsb.muohio.edu/eop/).
