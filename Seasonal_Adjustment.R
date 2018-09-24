@@ -168,16 +168,20 @@ SA_EOP <- function(data.path, file.name, since.date, fields, return.format){
   ## Spit out resulting data.table in user's chosen file format into whatever file path passed
    #  as data.path
   if (return.format %in% c('CSV', 'csv')){
-    write.csv(cps, file = paste0(data.path, '/', file.name, '_', 'SA.csv'), row.names = F)
+    write.csv(cps, file = paste0(data.path, '/', strsplit(file.name, split = '.', fixed = T)[[1]][1], '_', 'SA.csv'), row.names = F)
   }
   else if (return.format %in% c('dta', 'DTA')){
-    write.dta(cps, file = paste0(data.path, '/', file.name, '_', 'SA.dta'), version = 11)
+    write.dta(cps, file = paste0(data.path, '/', strsplit(file.name, split = '.', fixed = T)[[1]][1], '_', 'SA.dta'), version = 11)
   }
 
   cps <- list(data = cps, fails = fail.list)
     
   return(cps)
 }
+
+  
+  
+
 
   
   
