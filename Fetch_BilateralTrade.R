@@ -1,13 +1,31 @@
-get_bilatTrade <- function(dest.path, countries, since.date){
+get_bilatTrade <- function(dest.path, countries, since.date, file.name){
+  #' @title Grab Census Bureau data for US bilateral trade balance and load into environment
+  #' @description This function goes and fetches the xlsx file hosted on the US Census Bureau's website at
+  #' https://www.census.gov/foreign-trade/balance/index.html. This dataset contains the US bilateral trade
+  #' data for a host of countries. With the function, the data is imported and the net trade balance is
+  #' calculated. Basically, gets data ready for plotting on the EOP website. Must pass \code{dest.path} for 
+  #' operation
+  #' @param dest.path A character string giving the path for the location data is downloaded. No default.
+  #' @param countries Character vector giving the names of the countries whose trade balance you wish to inspect.
+  #' Defaults to \code{c('Brazil', 'Canada', 'China', 'Germany', 'Japan', 'Mexico')}
+  #' @param since.date A character string giving the earliest date you want to report. Must be in form \code{'yyyy-mm-dd'} or coercible to such.
+  #' Defaults to grab latest six months of data
+  #' @param file.name Character string giving the name of the file you wish to save the downloaded xlsx file under. 
+  #' Defaults to \code{'bilatTrade_yyyymmdd.xlsx'}
+  #' @examples 
+  #' bilat <- get_bilatTrade(dest.path = 'C:/Users/blahblah')
+  #' bilat <- get_bilatTrade(dest.path = 'C:/Users/blahblah', countries = c('China', 'Zimbabwe'))
+  #' @export
   
   library(readxl)
+  library(data.table)
   
   if(missing(countries)) countries <- c("Brazil", "Canada", 'China', "Germany", "Japan", "Mexico")
-  if(missing(since.date)) since.date <- date(Sys.Date()) - months(9)
+  if(missing(since.date)) since.date <- date(Sys.Date()) - (day(date(Sys.Date())) - 1) - months(7)
+  if(missing(file.name)) file.name <- file.name <- paste0('bilatTrade', '_', date, '.xlsx')
   
   since.date <- as.Date(since.date)
   date <- gsub(pattern = '-', replacement = '', as.character(date(Sys.Date()))) 
-  file.name <- paste0('bilatTrade', '_', date, '.xlsx')
   month.lookup <- data.table(month.abb = tolower(month.abb), month.name)
 
   download.file("https://www.census.gov/foreign-trade/balance/country.xlsx", 
