@@ -26,9 +26,11 @@ get_bilatTrade <- function(download.new, dest.path, file.name, countries, since.
   library(lubridate)
   
   today.date <- gsub(pattern = '-', replacement = '', as.character(Sys.Date())) 
+  schedule <- Census_Release()
+  stat.month <- paste0(month.name[month(Sys.Date())], ' ', year(Sys.Date()))
   
   if(missing(countries)) countries <- c("Brazil", "Canada", 'China', "Germany", "Japan", "Mexico")
-  if(missing(since.date)) since.date <- Sys.Date() - (day(Sys.Date()) - 1) - months(7) - 1*(day(Sys.Date()) <= 8)
+  if(missing(since.date)) since.date <- Sys.Date() - (day(Sys.Date()) - 1) - months(7) - months(1*(day(Sys.Date()) <= day(schedule[stat.month, `Release Date`])))
   if(missing(file.name)) file.name <- paste0('bilatTrade', '_', today.date, '.xlsx')
   if(missing(download.new)) download.new <- T
   
@@ -107,4 +109,8 @@ get_bilatTrade <- function(download.new, dest.path, file.name, countries, since.
     }
   return(bilat)
 }
+
+
+
+
 
