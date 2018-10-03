@@ -4,12 +4,10 @@ get_bilatTrade <- function(download.new, dest.path, file.name, countries, since.
   #' @description This function goes and fetches the xlsx file hosted on the US Census Bureau's website at
   #' https://www.census.gov/foreign-trade/balance/index.html. This dataset contains the US bilateral trade
   #' data for a host of countries. With the function, the data is imported and the net trade balance is
-  #' calculated. Basically, gets data ready for plotting on the EOP website. Must pass \code{dest.path} for 
-  #' operation
+  #' calculated. Basically, gets data ready for plotting on the EOP website. 
   #' @param download.new True/False: Do you wish to download a new file from the Census Bureau? If so, goes and 
   #' fetches file and if not, user must navigate to the preexisting xlsx file to use
-  #' @param dest.path A character string giving the path for the location data is downloaded. No default - will fail
-  #' if \code{download.new = F} and \code{dest.path} not given
+  #' @param dest.path A character string giving the path for the location data is downloaded. Defaults to current working directory
   #' @param file.name Character string giving the name of the file you wish to save the downloaded xlsx file under. 
   #' Defaults to \code{'bilatTrade_yyyymmdd.xlsx'} where 'yyyymmdd' is today's date.
   #' @param countries Character vector giving the names of the countries whose trade balance you wish to inspect.
@@ -27,13 +25,14 @@ get_bilatTrade <- function(download.new, dest.path, file.name, countries, since.
   
   today.date <- gsub(pattern = '-', replacement = '', as.character(Sys.Date())) 
   schedule <- Census_Release()
-  stat.month <- paste0(month.name[month(Sys.Date())], ' ', year(Sys.Date()))
+  stat.month <- paste0(month.name[month(Sys.Date() - months(2))], ' ', year(Sys.Date()))
   
+  if(missing(dest.path)) dest.path <- getwd()
   if(missing(countries)) countries <- c("Brazil", "Canada", 'China', "Germany", "Japan", "Mexico")
   if(missing(since.date)) since.date <- Sys.Date() - (day(Sys.Date()) - 1) - months(7) - months(1*(day(Sys.Date()) <= day(schedule[stat.month, `Release Date`])))
   if(missing(file.name)) file.name <- paste0('bilatTrade', '_', today.date, '.xlsx')
   if(missing(download.new)) download.new <- T
-  
+
   since.date <- as.Date(since.date)
   month.lookup <- data.table(month.abb = tolower(month.abb), month.name)
   
@@ -70,7 +69,8 @@ get_bilatTrade <- function(download.new, dest.path, file.name, countries, since.
     ##Make Exports and Imports two separate cols
       dcast(., year + CTYNAME + month.name + month.num + day.num  + date ~ value, value.var = 'amount') %>%
       .[ , `Net Goods Trade` := Exports - Imports] %>%
-      .[order(CTYNAME, date)]
+      .[order(CTYNAME, date)] %>%
+      setnames(., old = 'CTYNAME', new = 'Country')
     
   }
   
@@ -105,10 +105,14 @@ get_bilatTrade <- function(download.new, dest.path, file.name, countries, since.
         ##Make Exports and Imports two separate cols
         dcast(., year + CTYNAME + month.name + month.num + day.num  + date ~ value, value.var = 'amount') %>%
         .[ , `Net Goods Trade` := Exports - Imports] %>%
-        .[order(CTYNAME, date)]
+        .[order(CTYNAME, date)] %>%
+        setnames(., old = 'CTYNAME', new = 'Country')
     }
   return(bilat)
 }
+
+
+
 
 
 
