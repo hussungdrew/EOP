@@ -29,7 +29,7 @@ get_bilatTrade <- function(download.new, dest.path, file.name, countries, since.
   
   if(missing(dest.path)) dest.path <- getwd()
   if(missing(countries)) countries <- c("Brazil", "Canada", 'China', "Germany", "Japan", "Mexico")
-  if(missing(since.date)) since.date <- Sys.Date() - (day(Sys.Date()) - 1) - months(7) - months(1*(day(Sys.Date()) <= day(schedule[stat.month, `Release Date`])))
+  if(missing(since.date)) since.date <- Sys.Date() - (day(Sys.Date()) - 1) - months(7) - months(1*(day(Sys.Date()) < day(schedule[stat.month, `Release Date`])))
   if(missing(file.name)) file.name <- paste0('bilatTrade', '_', today.date, '.xlsx')
   if(missing(download.new)) download.new <- T
 
@@ -62,10 +62,10 @@ get_bilatTrade <- function(download.new, dest.path, file.name, countries, since.
                                                       (month.name == "August")*8 + (month.name == "September")*9 +
                                                       (month.name == 'October')*10 + (month.name == "November")*11 + (month.name == "December")*12]] %>%
       .[ , day.num := 1] %>%
+      ##Months not reported are listed as 0 rather than NA
+      .[!amount == 0] %>%
       .[ , date := as.Date(paste0(year, '-', month.num, '-', '0', day.num))] %>%
       .[date >= since.date] %>%
-    ##Months not reported are listed as 0 rather than NA
-      .[!amount == 0] %>%
     ##Make Exports and Imports two separate cols
       dcast(., year + CTYNAME + month.name + month.num + day.num  + date ~ value, value.var = 'amount') %>%
       .[ , `Net Goods Trade` := Exports - Imports] %>%
